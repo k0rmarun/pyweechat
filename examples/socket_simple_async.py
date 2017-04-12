@@ -1,9 +1,10 @@
-from pyweechat import WeeChatSocket
+import pyweechat
 from pprint import pprint
 
-w = WeeChatSocket()
+w = pyweechat.WeeChatSocket()
 w.connect()
-w.send("sync irc.robustirc.#icannotexist")
+w.send_async("ping")
+
 try:
     while True:
         ret = w.poll()
@@ -11,4 +12,3 @@ try:
             pprint(vars(ret))
 except KeyboardInterrupt:
     pass
-w.disconnect()
