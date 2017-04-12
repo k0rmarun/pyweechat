@@ -1,1 +1,1 @@
-from .pyweechat import WeeChat, WeeChatMessage, WeeChatUnknownCommandException
+from .pyweechat import WeeChatSocket, WeeChatMessage, WeeChatUnknownCommandException

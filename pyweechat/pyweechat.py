@@ -14,10 +14,28 @@ class WeeChatMessage:
         self.decompress()
         self.result = []
         self.id = self.read_string()
-        while len(self.data) > 0:
-            type = self.read_type()
-            _data = self.read_value(type)
-            self.result.append(_data)
+
+        try:
+            while len(self.data) > 0:
+                self.log("init:", len(self.data))
+                self.log("init: remaining", len(self.data), self.data)
+                type = self.read_type()
+                self.log("init: type", type)
+                self.log("init: remaining", len(self.data), self.data)
+                _data = self.read_value(type)
+                self.result.append(_data)
+        except ValueError:
+            self.result = None
+        except KeyError:
+            self.result = None
+
+    def get_hdata_result(self) -> dict:
+        if self.result:
+            data = self.result[0][2]
+            if isinstance(data, list) and len(data) == 1:
+                return data[0]
+            return data
+        return None
 
     def log(self, *messages):
         if self.debug:
@@ -37,6 +55,7 @@ class WeeChatMessage:
         data = self.as_num(self.splice(4))
         self.log("length", data)
         self.length = data
+        assert self.length == len(self.data)+4
 
     def read_type(self):
         data = self.splice(3)
@@ -63,12 +82,12 @@ class WeeChatMessage:
         len = self.read_int()
         self.log("string_:", len)
         if len == 0:
-            return b""
+            return ""
         elif len == 0xffffffff:
-            return b""
+            return ""
         data = self.splice(len)
         self.log("string:", data)
-        return data
+        return data.decode()
 
     def read_buffer(self):
         data = self.read_string()
@@ -79,7 +98,7 @@ class WeeChatMessage:
         len = self.as_num(self.read_chr())
         data = self.splice(len)
         self.log("pointer:", len, data)
-        return data
+        return data.decode()
 
     def read_time(self):
         len = self.as_num(self.read_chr())
@@ -102,18 +121,23 @@ class WeeChatMessage:
     def read_hdata(self):
         self.log("begin hdata")
         hpath = self.read_string()
+        if not hpath:
+            return None
+        path_length = len(hpath.split("/"))
         keys = self.read_string()
-        keys = keys.split(b",")
+        keys = keys.split(",")
         _keys = []
         for key in keys:
-            _key = key.split(b":")
+            _key = key.split(":")
             self.log("hdata: key", _key)
             _keys.append((_key[0], _key[1]))
 
         count = self.read_int()
         path = []
         for i in range(count):
-            ppath = self.read_pointer()
+            for j in range(path_length):
+                self.read_pointer()
+
             path_data = {}
             for key in _keys:
                 self.log("hdata: val:", key)
@@ -152,19 +176,22 @@ class WeeChatMessage:
 
     def read_value(self, _type):
         funcs = {
-            b"chr": self.read_chr,
-            b"int": self.read_int,
-            b"lon": self.read_long,
-            b"str": self.read_string,
-            b"buf": self.read_buffer,
-            b"ptr": self.read_pointer,
-            b"tim": self.read_time,
-            b"htb": self.read_hash_table,
-            b"hda": self.read_hdata,
-            b"inf": self.read_info,
-            b"inl": self.read_infolist,
-            b"arr": self.read_array
+            "chr": self.read_chr,
+            "int": self.read_int,
+            "lon": self.read_long,
+            "str": self.read_string,
+            "buf": self.read_buffer,
+            "ptr": self.read_pointer,
+            "tim": self.read_time,
+            "htb": self.read_hash_table,
+            "hda": self.read_hdata,
+            "inf": self.read_info,
+            "inl": self.read_infolist,
+            "arr": self.read_array
         }
+        if isinstance(_type,bytes):
+            _type = _type.decode()
+
         self.log("value", _type)
         if _type in funcs:
             return funcs[_type]()
@@ -183,7 +210,7 @@ class WeeChatUnknownCommandException(Exception):
         super(Exception, self).__init__(command)
 
 
-class WeeChat:
+class WeeChatSocket:
     def __init__(self, hostname: str = "localhost", port: int = 8000, use_ssl: bool = False):
         context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
         context.verify_mode = ssl.CERT_REQUIRED
@@ -228,7 +255,7 @@ class WeeChat:
         conection += b"\r\n"
         self.socket.sendall(conection)
 
-    def send(self, data: str) -> None:
+    def send_async(self, data: str) -> None:
         if data:
             command = data.strip().split()[0].strip()
             if command not in ["hdata", "info", "infolist", "nicklist", "input", "sync", "desync", "quit"]:
@@ -237,9 +264,9 @@ class WeeChat:
 
     def poll(self) -> WeeChatMessage:
         try:
-            response = self.socket.recv(1024)
+            response = self.socket.recv(4096*1024)
         except socket.error:
-            return
+            return None
 
         if response:
             response = WeeChatMessage(response)
@@ -262,3 +289,118 @@ class WeeChat:
     def disconnect(self) -> None:
         self.socket.sendall(b"quit\r\n")
         self.socket.close()
+
+    def wait(self) -> WeeChatMessage:
+        while True:
+            ret = self.poll()
+            if ret is not None:
+                return ret
+
+    def send(self, data:str) -> WeeChatMessage:
+        self.send_async(data)
+        return self.wait()
+
+from pprint import pprint
+
+class WeeChatBuffer:
+    def __init__(self, data:dict = None):
+        self.name = ""
+        self.full_name = ""
+        self.short_name = ""
+        self.title = ""
+        self.active = ""
+        self.number = ""
+        self.lines = []
+        self.nicklist = []
+        if data:
+            self.name = data.get("name")
+            self.full_name = data.get("full_name")
+            self.short_name = data.get("short_name")
+            self.title = data.get("title")
+            self.active = data.get("active")
+            self.number = data.get("number")
+            self.lines = []
+            self.nicklist = []
+
+    @staticmethod
+    def from_pointer(socket: WeeChatSocket, pointer: str):
+        if not pointer.startswith("gui"):
+            pointer = "0x"+pointer
+
+        # read meta information
+        resp_buf = socket.send("hdata buffer:" + pointer).get_hdata_result()
+        if resp_buf is None:
+            return None
+        buffer = WeeChatBuffer(resp_buf)
+
+        if resp_buf.get("nicklist") and resp_buf.get("nicklist") != 0:
+            resp_nick = socket.send("nicklist "+pointer).get_hdata_result()
+            if resp_nick:
+                for nick in resp_nick:
+                    if nick.get("visible") == b"\x01":
+                        buffer.nicklist.append({
+                            "name":nick.get("name"),
+                            "prefix": nick.get("prefix"),
+                            "level": nick.get("level",-1),
+                            "group": nick.get("group") == "\x01"
+                        })
+
+        def add_line(line):
+            buffer.lines.append({
+                "message": line["message"],
+                "displayed": line["displayed"] == b"\x01",
+                "highlight": line["highlight"] == b"\x01",
+                "date": line["date"]
+            })
+        # read line count
+        resp_lc = socket.send("hdata buffer:{}/lines".format(pointer)).get_hdata_result()
+        if resp_lc is not None:
+            line_count = resp_lc.get("lines_count")
+            if line_count < 20:  # request all line data at once
+                resp_ld = socket.send("hdata buffer:{}/lines/first_line(*)/data").get_hdata_result()
+                if resp_ld:
+                    for line in resp_ld:
+                        add_line(line)
+            else: #request a single line at a time
+                last_id = resp_lc.get("first_line")
+                for i in range(line_count-1):
+                    resp_ld = socket.send("hdata line:0x"+last_id+"/data").get_hdata_result()
+                    if resp_ld:
+                        add_line(resp_ld)
+
+                    resp_next = socket.send("hdata line:0x"+last_id).get_hdata_result()
+                    if resp_next:
+                        if resp_next.get("next_line") is not None and resp_next.get("next_line") != "0":
+                            last_id = resp_next.get("next_line")
+                        else:
+                            break
+                    else:
+                        break
+
+        return buffer, resp_buf
+
+
+class WeeChatClient:
+    def __init__(self, **kwargs):
+        self.socket = WeeChatSocket(kwargs.get("hostname","localhost"), kwargs.get("port",8000), kwargs.get("use_ssl",False))
+        self.socket.connect(kwargs.get("password"), kwargs.get("compressed", True))
+
+        self.buffers = []
+        self.setup()
+        pprint(self.buffers, indent=4, width=200)
+
+    def setup(self):
+        last = "gui_buffers"
+        while True:
+            buf, raw = WeeChatBuffer.from_pointer(self.socket, last)
+
+            if buf:
+                self.buffers.append(buf)
+            if raw:
+                if raw.get("next_buffer") is not None and raw.get("next_buffer") != "0":
+                    last = raw.get("next_buffer")
+                else:
+                    break
+
+if __name__ == '__main__':
+    WeeChatClient()

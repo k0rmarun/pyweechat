@@ -1,7 +1,7 @@
-from pyweechat import WeeChat
+from pyweechat import WeeChatSocket
 from pprint import pprint
 
-w = WeeChat()
+w = WeeChatSocket()
 w.connect()
 w.send("sync irc.robustirc.#icannotexist")
 try:
