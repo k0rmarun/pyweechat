@@ -2,6 +2,10 @@ from .socket import WeeChatSocket
 
 
 class WeeChatBuffer:
+    """
+    Represents a single weechat buffer.
+    Used in WeeChatClient
+    """
     def __init__(self, data: dict = None):
         self.name = ""
         self.full_name = ""

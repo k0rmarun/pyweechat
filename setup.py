@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pyweechat',
-    version='0.2',
+    version='0.3',
     description='Python library for communicating with an weechat irc relay',
     url='http://github.com/k0rmarun/pyweechat',
     author='Niels Bernlöhr',

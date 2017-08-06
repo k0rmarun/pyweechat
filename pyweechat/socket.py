@@ -5,14 +5,28 @@ from .message import WeeChatMessage
 
 
 class WeeChatSocket:
-    def __init__(self, hostname: str = "localhost", port: int = 8000, use_ssl: bool = False):
-        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
-        context.verify_mode = ssl.CERT_REQUIRED
-        context.check_hostname = True
-        context.load_default_certs()
+    """
+    Socket to interact with the weechat relay server.
+    """
+    def __init__(self, hostname: str = "localhost", port: int = 8000, use_ssl: bool = False, custom_cert: dict = None):
+        """
+        Setup socket which is used to connect to the Weechat relay
+        :param hostname: hostname or ip address of the desired weechat relay server
+        :param port: port on which the weechat relay server ist listening
+        :param use_ssl: secure the transmission via SSL/TLS.
+        :param custom_cert: enforce a specific certificate (might be self signed). See SSLContext.load_verify_locations for specific parameter names
+        """
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if use_ssl:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+            context.verify_mode = ssl.CERT_REQUIRED
+            context.check_hostname = True
+            if custom_cert:
+                context.load_verify_locations(**custom_cert)
+            else:
+                context.load_default_certs()
+
             self.socket = context.wrap_socket(self.socket, server_hostname=hostname)
         self.socket.connect((hostname, port))
         self.socket.setblocking(0)
@@ -41,6 +55,11 @@ class WeeChatSocket:
         }
 
     def connect(self, password: str = None, compressed: bool = True) -> None:
+        """
+        Initialize the connection with the weechat relay
+        :param password: Password to use. None if unauthenticated
+        :param compressed: Request response to be compressed
+        """
         conection = b"init"
         if password:
             conection += b" password=" + password.encode("utf-8")
@@ -50,6 +69,10 @@ class WeeChatSocket:
         self.socket.sendall(conection)
 
     def send_async(self, data: str) -> None:
+        """
+        Send data to the weechat relay. Do not await response
+        :param data: Data to send. First word must be a valid weechat relay command
+        """
         if data:
             command = data.strip().split()[0].strip()
             if command not in ["hdata", "info", "infolist", "nicklist", "input", "sync", "desync", "quit"]:
@@ -57,6 +80,11 @@ class WeeChatSocket:
             self.socket.sendall(data.encode() + b"\r\n")
 
     def poll(self) -> WeeChatMessage:
+        """
+        Poll for new data from weechat relay server. Trigger registered events
+        Must be called within the relay servers socket timeout period
+        :return: WeeChatMessage or None if error or nothing new
+        """
         try:
             response = self.socket.recv(4096 * 1024)
         except socket.error:
@@ -74,19 +102,36 @@ class WeeChatSocket:
         return None
 
     def on(self, event: str, callback: callable = None) -> None:
+        """
+        Register event callback
+        :param event: name of the subscribed event
+        :param callback: function to call. None to end listening
+        """
         if event in self.events.keys():
             self.events[event] = callback
 
     def disconnect(self) -> None:
+        """
+        Gracefully end connection with weechat relay
+        """
         self.socket.sendall(b"quit\r\n")
         self.socket.close()
 
     def wait(self) -> WeeChatMessage:
+        """
+        Waits for a response from relay server. Does not block interpreter thread, but has higher processor usage
+        :return: WeeChatMessage
+        """
         while True:
             ret = self.poll()
             if ret is not None:
                 return ret
 
     def send(self, data: str) -> WeeChatMessage:
+        """
+        Send data to the weechat relay, wait for response
+        :param data: data to send to the relay. First word must be a valid weechat relay command
+        :return: WeeChatMessage
+        """
         self.send_async(data)
         return self.wait()
