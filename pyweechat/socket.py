@@ -19,7 +19,7 @@ class WeeChatSocket:
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if use_ssl:
-            context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS)
             context.verify_mode = ssl.CERT_REQUIRED
             context.check_hostname = True
             if custom_cert:
