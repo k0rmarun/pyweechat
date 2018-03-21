@@ -2,24 +2,37 @@ import ssl
 import socket
 from .exceptions import WeeChatUnknownCommandException
 from .message import WeeChatMessage
+import sys
+
+
+def create_ssl_context(protocol_version=None):
+    if protocol_version is not None:
+        return ssl.SSLContext(protocol_version)
+
+    if sys.version_info() >= (3, 6):  # Auto select best available version only available in python 3.6+
+        return ssl.SSLContext(ssl.PROTOCOL_TLS)
+    return ssl.SSLContext(ssl.PROTOCOL_TLSv1)
 
 
 class WeeChatSocket:
     """
     Socket to interact with the weechat relay server.
     """
-    def __init__(self, hostname: str = "localhost", port: int = 8000, use_ssl: bool = False, custom_cert: dict = None):
+
+    def __init__(self, hostname: str = "localhost", port: int = 8000, use_ssl: bool = False, custom_cert: dict = None,
+                 custom_ssl_protocol=None):
         """
         Setup socket which is used to connect to the Weechat relay
         :param hostname: hostname or ip address of the desired weechat relay server
         :param port: port on which the weechat relay server ist listening
         :param use_ssl: secure the transmission via SSL/TLS.
         :param custom_cert: enforce a specific certificate (might be self signed). See SSLContext.load_verify_locations for specific parameter names
+        :param custom_ssl_protocol: custom ssl.PROTOCOL enum to use. If not set WeeChatSocket will select the best available version (if python 3.6+) or fall back to TLSv1
         """
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if use_ssl:
-            context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+            context = create_ssl_context(custom_ssl_protocol)
             context.verify_mode = ssl.CERT_REQUIRED
             context.check_hostname = True
             if custom_cert:
@@ -75,7 +88,7 @@ class WeeChatSocket:
         """
         if data:
             command = data.strip().split()[0].strip()
-            if command not in ["hdata", "info", "infolist", "nicklist", "input", "sync", "desync", "quit"]:
+            if command not in ["ping", "hdata", "info", "infolist", "nicklist", "input", "sync", "desync", "quit"]:
                 raise WeeChatUnknownCommandException(command)
             self.socket.sendall(data.encode() + b"\r\n")
 

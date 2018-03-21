@@ -8,6 +8,7 @@ class WeeChatClient:
     """
     Hight level interaction with weechat server
     """
+
     def __init__(self, **kwargs):
         """
         Connect to weechat relay server and requests information for available buffers
@@ -19,7 +20,8 @@ class WeeChatClient:
         :param compressed
         """
         self.socket = WeeChatSocket(kwargs.get("hostname", "localhost"), kwargs.get("port", 8000),
-                                    kwargs.get("use_ssl", False), kwargs.get("custom_cert", None))
+                                    kwargs.get("use_ssl", False), kwargs.get("custom_cert", None),
+                                    kwargs.get("custom_ssl_protocol", None))
         self.socket.connect(kwargs.get("password"), kwargs.get("compressed", True))
 
         self.buffers = []
@@ -89,24 +91,24 @@ class WeeChatClient:
 
         # Setup event handling only after reading buffers completed
         self.socket.on("buffer_opened", self._on_buffer_opened)
-        self.socket.on("buffer_type_changed", None) # NIY
+        self.socket.on("buffer_type_changed", None)  # NIY
         self.socket.on("buffer_moved", self._on_buffer_moved)
-        self.socket.on("buffer_merged", None) # NIY
-        self.socket.on("buffer_unmerged", None) # NIY
-        self.socket.on("buffer_hidden", None) # NIY
-        self.socket.on("buffer_unhidden", None) # NIY
+        self.socket.on("buffer_merged", None)  # NIY
+        self.socket.on("buffer_unmerged", None)  # NIY
+        self.socket.on("buffer_hidden", None)  # NIY
+        self.socket.on("buffer_unhidden", None)  # NIY
         self.socket.on("buffer_remaned", self._on_buffer_renamed)
         self.socket.on("buffer_title_changed", self._on_buffer_title_changed)
-        self.socket.on("buffer_localvar_added", None) # NIY
-        self.socket.on("buffer_localvar_changed", None) # NIY
-        self.socket.on("buffer_localvar_removed", None) # NIY
+        self.socket.on("buffer_localvar_added", None)  # NIY
+        self.socket.on("buffer_localvar_changed", None)  # NIY
+        self.socket.on("buffer_localvar_removed", None)  # NIY
         self.socket.on("buffer_closing", self._on_buffer_closing)
         self.socket.on("buffer_cleared", self._on_buffer_cleared)
         self.socket.on("nicklist", self._on_nicklist)
-        self.socket.on("nicklist_diff", self._on_nicklist_diff) # NIY
-        self.socket.on("pong", None) # NIY
-        self.socket.on("upgrade", None) # NIY
-        self.socket.on("upgrade_ended", None) # NIY
+        self.socket.on("nicklist_diff", self._on_nicklist_diff)  # NIY
+        self.socket.on("pong", None)  # NIY
+        self.socket.on("upgrade", None)  # NIY
+        self.socket.on("upgrade_ended", None)  # NIY
 
         self.sync("*")
 
