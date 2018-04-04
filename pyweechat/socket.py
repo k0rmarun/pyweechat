@@ -9,7 +9,7 @@ def create_ssl_context(protocol_version=None):
     if protocol_version is not None:
         return ssl.SSLContext(protocol_version)
 
-    if sys.version_info() >= (3, 6):  # Auto select best available version only available in python 3.6+
+    if sys.version_info >= (3, 6):  # Auto select best available version only available in python 3.6+
         return ssl.SSLContext(ssl.PROTOCOL_TLS)
     return ssl.SSLContext(ssl.PROTOCOL_TLSv1)
 
